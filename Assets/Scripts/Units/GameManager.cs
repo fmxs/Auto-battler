@@ -64,108 +64,130 @@ public class GameManager : Manager<GameManager>
 
     void Update()
     {
+        GameMain();
+    }
+
+    void ChangeStateDecision()
+    {
+        state.text = "Decision round";
+        stateTimer += Time.deltaTime;
+
+        if (stateTimer < decisionTime / 2 && checkTeam2Units)
+        {
+            Debug.Log("se hace en dec");
+            correctTeam2Units();
+        }
+
+        if (stateTimer >= decisionTime)
+        {
+            SetState(GameState.Fight);
+            unitsFighting = true;
+            DebugFight();
+        }
+    }
+
+    void ChangeStateFight()
+    {
+        state.text = "Fight round";
+        stateTimer += Time.deltaTime;
+        if (stateTimer > 30f || team1CopyBoardUnits.Count == 0 || team2CopyBoardUnits.Count == 0)
+        {
+            SetState(GameState.Decision);
+            playerShopRef.RefreshEndRound();
+            if (team1CopyBoardUnits.Count < team2CopyBoardUnits.Count || team1BoardUnits.Count == 0)
+                gamesWonAI += 1;
+            else if (team1CopyBoardUnits.Count > team2CopyBoardUnits.Count || team2BoardUnits.Count == 0)
+                gamesWonPlayer += 1;
+            else
+            {
+                gamesWonAI += 1;
+                gamesWonPlayer += 1;
+            }
+            if (gamesWonPlayer == 10 || gamesWonAI == 10)
+            {
+                SceneManager.LoadScene("MainMenu");
+            }
+            team1CopyBoardUnits.Clear();
+            team2CopyBoardUnits.Clear();
+            foreach (BaseUnit unit in team1BoardUnits)
+            {
+                unit.respawn();
+            }
+            foreach (BaseUnit unit in team2BoardUnits)
+            {
+                unit.respawn();
+            }
+            roundsPlayer.text = "Rounds won by player: " + gamesWonPlayer.ToString();
+            roundsAi.text = "Rounds won by opponent: " + gamesWonAI.ToString();
+            PlayerData.Instance.moneyEndRound();
+            IA_Manager.Instance.shopRef.RefreshEndRound();
+            IAData.Instance.moneyEndRound();
+            IA_Manager.Instance.buyCard();
+
+            CompleteFight();
+            correctTeam2Units();
+            checkTeam2Units = true;
+            GridManager.Instance.correctNodes();
+        }
+    }
+
+    void UpdateGameState()
+    {
         switch (gameState)
         {
             case GameState.Decision:
-                state.text = "Decision round";
-                stateTimer += Time.deltaTime;
-
-                if (stateTimer < decisionTime / 2)
-                {
-                    if (checkTeam2Units)
-                    {
-                        Debug.Log("se hace en dec");
-                        correctTeam2Units();
-                    }
-
-                }
-
-                if (stateTimer >= decisionTime)
-                {
-
-                    
-                    SetState(GameState.Fight);
-                    unitsFighting = true;
-                    DebugFight();
-                }
-                break;
-
+            {
+                ChangeStateDecision();
+            }
+            break;
             case GameState.Fight:
-                state.text = "Fight round";
-                stateTimer += Time.deltaTime;
-                if (stateTimer > 30f || team1CopyBoardUnits.Count == 0 || team2CopyBoardUnits.Count == 0)
-                {
-                    SetState(GameState.Decision);
-                    playerShopRef.RefreshEndRound();
-                    if (team1CopyBoardUnits.Count < team2CopyBoardUnits.Count || team1BoardUnits.Count == 0)
-                        gamesWonAI += 1;
-                    else if (team1CopyBoardUnits.Count > team2CopyBoardUnits.Count ||  team2BoardUnits.Count == 0) 
-                        gamesWonPlayer += 1;
-                    else
-                    {
-                        gamesWonAI += 1;
-                        gamesWonPlayer += 1;
-                    }
-                    if (gamesWonPlayer == 10 || gamesWonAI == 10)
-                    {
-                        SceneManager.LoadScene("MainMenu");
-                    }
-                    team1CopyBoardUnits.Clear();
-                    team2CopyBoardUnits.Clear();
-                    foreach (BaseUnit unit in team1BoardUnits)
-                    {
-                        unit.respawn();
-                    }
-                    foreach (BaseUnit unit in team2BoardUnits)
-                    {
-                        unit.respawn();
-                    }
-                    roundsPlayer.text = "Rounds won by player: " + gamesWonPlayer.ToString();
-                    roundsAi.text = "Rounds won by opponent: " + gamesWonAI.ToString();
-                    PlayerData.Instance.moneyEndRound();
-                    IA_Manager.Instance.shopRef.RefreshEndRound();
-                    IAData.Instance.moneyEndRound();
-                    IA_Manager.Instance.buyCard();
-
-                    CompleteFight();
-                    correctTeam2Units();
-                    checkTeam2Units = true;
-                    GridManager.Instance.correctNodes();
-                }
+            {
+                ChangeStateFight();
+            }
+            break;
+            default:
                 break;
         }
+    }
+
+
+    void GameMain()
+    {
+        UpdateGameState();
         time.text = "Time: " + Mathf.RoundToInt(decisionTime - stateTimer).ToString();
+    }
+
+    void SetDecisionTime(GameState newState)
+    {
+        decisionTime = (newState == GameState.Decision) ? 10f : 30f;
     }
 
     void SetState(GameState newState)
     {
         gameState = newState;
         stateTimer = 0f;
-        if (newState == GameState.Decision)
-        {
-            decisionTime = 10f;
-        }
-        else decisionTime = 30f;
+        SetDecisionTime(newState);
     }
 
     public List<BaseUnit> GetUnitsAgainst(Team otherTeam)
     {
-        if (otherTeam == Team.Team1)
-            return team2CopyBoardUnits;
-        else return team1CopyBoardUnits;
+        return (otherTeam == Team.Team1) ? team2CopyBoardUnits : team1CopyBoardUnits;
     }
+
+    void CopyBoardUnits(List<BaseUnit> sourceUnits, List<BaseUnit> targetUnits)
+    {
+        foreach (BaseUnit unit in sourceUnits)
+        {
+            targetUnits.Add(unit);
+        }
+    }
+
     public void DebugFight()
     {
-        if (unitsFighting) {
-            
-
-            foreach (BaseUnit unit in team1BoardUnits){
-                team1CopyBoardUnits.Add(unit);
-            }
-            foreach (BaseUnit unit in team2BoardUnits)
-            {
-                team2CopyBoardUnits.Add(unit);
-            }
+        if (unitsFighting) 
+        {
+            CopyBoardUnits(team1BoardUnits, team1CopyBoardUnits);
+            CopyBoardUnits(team2BoardUnits, team2CopyBoardUnits);
             unitsFighting = false;
         }
     }
@@ -197,7 +219,7 @@ public class GameManager : Manager<GameManager>
     {
         team1CopyBoardUnits.Remove(unit);
         team2CopyBoardUnits.Remove(unit);
-        
+
         unit.CurrentNode.SetOccupied(false);
         unit.gameObject.SetActive(false);
     }
