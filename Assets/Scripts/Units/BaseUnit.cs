@@ -62,6 +62,11 @@ public class BaseUnit : MonoBehaviour
         BaseUnit entity = null;
         foreach (BaseUnit e in allEnemies)
         {
+            if (e == null)
+            {
+                continue;
+            }
+
             if (Vector3.Distance(e.transform.position, this.transform.position) <= minDistance && e.isActiveAndEnabled)
             {
                 minDistance = Vector3.Distance(e.transform.position, this.transform.position);
@@ -106,8 +111,8 @@ public class BaseUnit : MonoBehaviour
 
 
 
-                var path = GridManager.Instance.GetPath(currentNode, destination);
-                if (path == null && path.Count >= 1)
+                List<Node> path = GridManager.Instance.GetPath(currentNode, destination);
+                if (path == null || path.Count <= 1)
                     return;
 
                 if (path[1].IsOccupied)

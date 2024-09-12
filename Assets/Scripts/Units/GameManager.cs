@@ -411,6 +411,10 @@ public class GameManager : Manager<GameManager>
 
         foreach (BaseUnit unit in team2BoardUnits)
         {
+            if (unit == null) 
+            {
+                continue;
+            }
             Tile tile_temp = GridManager.Instance.GetTileForNode(unit.CurrentNode);
             if (!unit.gameObject.activeSelf || tile_temp.isBench)
             {
