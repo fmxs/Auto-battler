@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
+using System.Numerics;
 
 public class BaseUnit : MonoBehaviour
 {
@@ -40,6 +41,11 @@ public class BaseUnit : MonoBehaviour
     protected bool dead = false;
     protected float waitBetweenAttack;
 
+    // the growing rate for the hero who improves the level
+    protected double m_dDamageRate = 1.5;
+    protected float m_fHealthRate = 1.5;
+    protected float m_fAttackRate = 1.2;
+
     public void Start()
     {
         animator = GetComponent<Animator>();
@@ -77,62 +83,82 @@ public class BaseUnit : MonoBehaviour
         currentTarget = entity;
     }
 
+    /// <summary>
+    /// make hero to move to the target position
+    /// </summary>
+    /// <returns>Does player have reached the target position</returns>
+    protected bool MoveTowards()
+    {
+        Vector3 direction = destination.worldPosition - this.transform.position;
+        // if hero have reached the target position, then Idle
+        if (direction.sqrMagnitude <= 0.005f)
+        {
+            transform.position = destination.worldPosition;
+            animator.SetTrigger("Idle");
+            return true;
+        }
+
+        animator.SetTrigger("Running");
+        this.transform.position += direction.normalized * movementSpeed * Time.deltaTime;
+        this.transform.LookAt(destination.worldPosition);
+        return false;
+    }
+
     protected void GetInRange()
     {
-        if (!isBenched)
+        if (isBenched)
         {
+            return;
+        }
 
-            if (currentTarget == null) {
+        if (currentTarget == null)
+        {
+            animator.SetTrigger("Idle");
+            return;
+        }
+
+        if (!moving)
+        {
+            destination = null;
+
+            List<Node> candidates = GridManager.Instance.GetNodesCloseTo(currentTarget.currentNode);
+            candidates = candidates.OrderBy(x => Vector3.Distance(x.worldPosition, this.transform.position)).ToList();
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (!candidates[i].IsOccupied)
+                {
+                    destination = candidates[i];
+                    break;
+                }
+            }
+
+            // if there is no place to go, then Idle
+            if (destination == null)
+            {
                 animator.SetTrigger("Idle");
                 return;
             }
-            if (!moving)
+
+            List<Node> path = GridManager.Instance.GetPath(currentNode, destination);
+            if (path == null || path.Count <= 1 || path[1].IsOccupied)
             {
-
-                destination = null;
-                List<Node> candidates = GridManager.Instance.GetNodesCloseTo(currentTarget.currentNode);
-                candidates = candidates.OrderBy(x => Vector3.Distance(x.worldPosition, this.transform.position)).ToList();
-                for (int i = 0; i < candidates.Count; i++)
-                {
-
-
-                    if (!candidates[i].IsOccupied)
-                    {
-
-
-                        destination = candidates[i];
-                        break;
-                    }
-                }
-                if (destination == null) {
-                    animator.SetTrigger("Idle");
-                    return;
-                }
-
-
-
-                List<Node> path = GridManager.Instance.GetPath(currentNode, destination);
-                if (path == null || path.Count <= 1)
-                    return;
-
-                if (path[1].IsOccupied)
-                    return;
-
-                path[1].SetOccupied(true);
-                destination = path[1];
+                return;
             }
 
-
-            moving = !MoveTowards();
-
-            if (!moving)
-            {
-
-
-                currentNode.SetOccupied(false);
-                currentNode = destination;
-            }
+            path[1].SetOccupied(true);
+            destination = path[1];
         }
+
+
+        moving = !MoveTowards();
+
+        if (!moving)
+        {
+            currentNode.SetOccupied(false);
+            currentNode = destination;
+        }
+        
     }
 
     public void TakeDamage(double amount)
@@ -146,6 +172,7 @@ public class BaseUnit : MonoBehaviour
             GameManager.Instance.UnitDead(this);
         }
     }
+
     protected virtual void Attack()
     {
         if (!canAttack)
@@ -172,35 +199,19 @@ public class BaseUnit : MonoBehaviour
         currentNode = node;
     }
 
-
-
-    protected bool MoveTowards()
-    {
-        
-        Vector3 direction = destination.worldPosition - this.transform.position;
-        if (direction.sqrMagnitude <= 0.005f)
-        {
-            transform.position = destination.worldPosition;
-            animator.SetTrigger("Idle");
-            return true;
-        }
-        animator.SetTrigger("Running");
-        this.transform.position += direction.normalized * movementSpeed * Time.deltaTime;
-        this.transform.LookAt(destination.worldPosition);
-        return false;
-    }
     protected virtual void Update()
     {
         if (this.isBenched)
+        {
             animator.SetTrigger("Idle");
-        if (currentTarget != null) {
-            if (!currentTarget.gameObject.activeSelf)
-            {
+        }
 
-                FindTarget();
-            }
+        if (currentTarget != null && !currentTarget.gameObject.activeSelf)
+        {
+            FindTarget();
         }
     }
+
     public void respawn()
     {
         //if (this.dead)
@@ -230,24 +241,34 @@ public class BaseUnit : MonoBehaviour
             else GameManager.Instance.checkLevelUp(this, Player.IA_Player);
         }
         if (this.level == 3)
+        {
             this.gameObject.transform.localScale = new Vector3(0.7f, 0.7f, 0.7f);
+        }
+
         this.transform.position = new Vector3(this.transform.position.x, 0, this.transform.position.z);
     }
+
     public void levelUpTrain()
     {
-        this.level += 1;
-        this.baseDamage *= 1.5;
-        this.baseDefaulthealth *= 2;
+        this.level++;
+        this.baseDamage *= m_dDamageRate;
+        this.baseDefaulthealth *= m_fHealthRate;
         this.baseHealth = baseDefaulthealth;
-        this.attackSpeed *= 1.2;
+        this.attackSpeed *= m_fAttackRate;
+
         if (this.level == 2)
         {
             this.gameObject.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
         }
+
         if (this.level == 3)
+        {
             this.gameObject.transform.localScale = new Vector3(0.7f, 0.7f, 0.7f);
+        }
+
         this.transform.position = new Vector3(this.transform.position.x, 0, this.transform.position.z);
     }
+
     public void moveToNode ( Node spawnNode)
     {
         Tile spawnTile = GridManager.Instance.GetTileForNode(this.currentNode);
@@ -267,7 +288,7 @@ public class BaseUnit : MonoBehaviour
                 GameManager.Instance.team2BoardUnits.Remove(this);
                 GameManager.Instance.team2BenchUnits.Add(this);
                 GameManager.Instance.team2CopyBoardUnits.Remove(this);
-                Debug.Log("añadido desde moveToNode");
+                Debug.Log("aï¿½adido desde moveToNode");
             }
         }
         else if (!GameManager.Instance.team2BoardUnits.Contains(this))
